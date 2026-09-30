@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  svg:
+    name: SVG well-formed
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - name: Parse every SVG as XML
+        run: |
+          python3 - <<'PY'
+          import subprocess, sys
+          import xml.etree.ElementTree as ET
+          files = [f for f in subprocess.check_output(["git", "ls-files", "-z", "*.svg"]).decode().split("\0") if f]
+          bad = 0
+          for f in files:
+              try:
+                  root = ET.parse(f).getroot()
+                  if not root.tag.endswith("svg"):
+                      raise ValueError(f"root element is <{root.tag}>, expected <svg>")
+              except Exception as e:
+                  bad += 1
+                  print(f"::error file={f}::{e}")
+          print(f"Checked {len(files)} SVG files, {bad} error(s)")
+          sys.exit(1 if bad else 0)
+          PY
